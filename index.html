@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GORILLAS — Classic QBasic Game</title>
+<style>
+  :root {
+    --bg: #0000aa;        /* classic DOS blue */
+    --panel: #000000;
+    --txt: #ffffff;
+    --accent: #ffff55;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #111;
+    color: var(--txt);
+    font-family: "Courier New", Courier, monospace;
+    height: 100%;
+  }
+  #wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+  }
+  h1 {
+    margin: 4px 0 0;
+    letter-spacing: 8px;
+    color: var(--accent);
+    text-shadow: 2px 2px 0 #aa5500;
+    font-size: 28px;
+  }
+  #subtitle { margin: 0; opacity: 0.7; font-size: 13px; }
+  #game-area {
+    position: relative;
+    border: 3px solid #555;
+    box-shadow: 0 0 24px rgba(0,0,0,0.7);
+    background: var(--bg);
+  }
+  canvas { display: block; image-rendering: pixelated; }
+  #hud {
+    width: 800px;
+    max-width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #000;
+    border: 2px solid #444;
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  .player-score { font-weight: bold; }
+  #p1score { color: #ff5555; }
+  #p2score { color: #55ff55; }
+  #status { color: var(--accent); text-align: center; flex: 1; }
+  #controls {
+    width: 800px;
+    max-width: 100%;
+    background: #000;
+    border: 2px solid #444;
+    padding: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+  }
+  #controls.hidden { display: none; }
+  label { font-size: 14px; }
+  input[type="number"] {
+    width: 80px;
+    background: #001a55;
+    color: var(--accent);
+    border: 1px solid #4477ff;
+    padding: 6px;
+    font-family: inherit;
+    font-size: 14px;
+  }
+  button {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 8px 18px;
+    font-family: inherit;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 2px;
+  }
+  button:hover { background: #fff; }
+  button:disabled { background: #555; color: #999; cursor: not-allowed; }
+  #turn-indicator { font-weight: bold; min-width: 160px; text-align: center; }
+  #setup {
+    width: 800px;
+    max-width: 100%;
+    background: #000;
+    border: 2px solid #444;
+    padding: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+  }
+  #setup select, #setup input {
+    background: #001a55;
+    color: var(--accent);
+    border: 1px solid #4477ff;
+    padding: 5px;
+    font-family: inherit;
+  }
+  .hint { font-size: 12px; opacity: 0.65; text-align: center; max-width: 800px; }
+  kbd {
+    background: #333; border: 1px solid #666; border-bottom-width: 2px;
+    border-radius: 3px; padding: 1px 5px; font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>GORILLAS</h1>
+  <p id="subtitle">A faithful recreation of the 1985 QBasic classic &mdash; throw exploding bananas!</p>
+
+  <div id="setup">
+    <label>Players:
+      <select id="mode">
+        <option value="2">2 Players (hot-seat)</option>
+        <option value="1">1 Player vs Computer</option>
+      </select>
+    </label>
+    <label>Gorilla 1 name: <input id="name1" type="text" maxlength="12" value="Player 1"></label>
+    <label>Gorilla 2 name: <input id="name2" type="text" maxlength="12" value="Player 2"></label>
+    <label>Gravity:
+      <select id="gravity">
+        <option value="9.8" selected>Earth (9.8)</option>
+        <option value="3.7">Mars (3.7)</option>
+        <option value="1.6">Moon (1.6)</option>
+        <option value="24.8">Jupiter (24.8)</option>
+      </select>
+    </label>
+    <label>Win at: <input id="winscore" type="number" min="1" max="10" value="3" style="width:60px"> wins</label>
+    <button id="startBtn">START GAME</button>
+  </div>
+
+  <div id="hud">
+    <span class="player-score"><span id="p1name">Player 1</span>: <span id="p1score">0</span></span>
+    <span id="status">Set up your match above</span>
+    <span class="player-score"><span id="p2name">Player 2</span>: <span id="p2score">0</span></span>
+  </div>
+
+  <div id="game-area">
+    <canvas id="game" width="800" height="500"></canvas>
+  </div>
+
+  <div id="controls" class="hidden">
+    <span id="turn-indicator">Player 1's turn</span>
+    <label>Angle: <input type="number" id="angle" min="0" max="90" value="45"></label>
+    <label>Velocity: <input type="number" id="velocity" min="1" max="200" value="75"></label>
+    <button id="fireBtn">FIRE! 🍌</button>
+    <button id="newGameBtn">New Match</button>
+  </div>
+
+  <p class="hint">
+    Enter an <b>angle</b> (0&ndash;90°, mirrored automatically for player&nbsp;2) and a <b>velocity</b>, then
+    <b>FIRE</b>. Watch the <b>wind arrow</b> at the bottom &mdash; it pushes your banana. Press
+    <kbd>Enter</kbd> in any field to fire.
+  </p>
+</div>
+
+<script>
+"use strict";
+(function () {
+  // ----- Canvas setup -----
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+
+  // ----- DOM -----
+  const el = (id) => document.getElementById(id);
+  const setup = el("setup");
+  const controls = el("controls");
+  const statusEl = el("status");
+  const turnIndicator = el("turn-indicator");
+  const angleInput = el("angle");
+  const velInput = el("velocity");
+  const fireBtn = el("fireBtn");
+
+  // ----- Game state -----
+  const COLORS = ["#a82828", "#28a828", "#2828a8", "#a8a828", "#a828a8", "#28a8a8", "#808080"];
+  const SKY = "#0000aa";
+
+  let state = null;
+
+  function defaultConfig() {
+    return {
+      mode: 2,
+      names: ["Player 1", "Player 2"],
+      gravity: 9.8,
+      winScore: 3,
+    };
+  }
+
+  // ---------------------------------------------------------------
+  //  City generation
+  // ---------------------------------------------------------------
+  function makeCity() {
+    const buildings = [];
+    const minBuildings = 8, maxBuildings = 12;
+    const count = randInt(minBuildings, maxBuildings);
+    const baseWidth = W / count;
+    let x = 0;
+    const slope = randInt(0, 5); // overall skyline shape
+    for (let i = 0; i < count; i++) {
+      const w = Math.floor(baseWidth) + (i === count - 1 ? (W - Math.floor(baseWidth) * count) : 0);
+      // Height varies; classic game uses a skyline that can rise toward middle
+      let maxH;
+      if (slope === 1) maxH = H * 0.25 + (Math.abs(count / 2 - i) / (count / 2)) * H * 0.4;
+      else if (slope === 2) maxH = H * 0.65 - (Math.abs(count / 2 - i) / (count / 2)) * H * 0.4;
+      else maxH = H * 0.55;
+      const h = randInt(Math.floor(H * 0.18), Math.floor(maxH));
+      buildings.push({
+        x: x,
+        y: H - h,
+        w: w,
+        h: h,
+        color: COLORS[randInt(0, COLORS.length - 1)],
+        windows: makeWindows(w, h),
+      });
+      x += w;
+    }
+    return buildings;
+  }
+
+  function makeWindows(w, h) {
+    // Pre-compute lit/unlit windows so they don't flicker each frame
+    const wins = [];
+    const wWidth = 6, wHeight = 8, gapX = 10, gapY = 14;
+    for (let wy = 12; wy < h - 10; wy += gapY) {
+      for (let wx = 6; wx < w - wWidth; wx += gapX) {
+        wins.push({ x: wx, y: wy, lit: Math.random() < 0.4 });
+      }
+    }
+    return wins;
+  }
+
+  // ---------------------------------------------------------------
+  //  Destruction mask — bananas blow circular holes in buildings.
+  //  We render buildings, then "erase" craters drawn over them, so
+  //  collision must be tested against an offscreen mask.
+  // ---------------------------------------------------------------
+  let mask, maskCtx;
+  function initMask() {
+    mask = document.createElement("canvas");
+    mask.width = W; mask.height = H;
+    maskCtx = mask.getContext("2d");
+  }
+
+  function drawBuildingsToMask() {
+    maskCtx.clearRect(0, 0, W, H);
+    for (const b of state.buildings) {
+      maskCtx.fillStyle = b.color;
+      maskCtx.fillRect(b.x, b.y, b.w, b.h);
+    }
+    // re-apply existing craters
+    maskCtx.globalCompositeOperation = "destination-out";
+    for (const c of state.craters) {
+      maskCtx.beginPath();
+      maskCtx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+      maskCtx.fill();
+    }
+    maskCtx.globalCompositeOperation = "source-over";
+  }
+
+  function addCrater(x, y, r) {
+    state.craters.push({ x, y, r });
+    maskCtx.globalCompositeOperation = "destination-out";
+    maskCtx.beginPath();
+    maskCtx.arc(x, y, r, 0, Math.PI * 2);
+    maskCtx.fill();
+    maskCtx.globalCompositeOperation = "source-over";
+  }
+
+  // Solid if the mask has a non-transparent pixel there
+  function isSolid(x, y) {
+    if (x < 0 || x >= W || y < 0 || y >= H) return false;
+    const d = maskCtx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
+    return d[3] > 0;
+  }
+
+  // ---------------------------------------------------------------
+  //  Gorilla placement — on top of buildings 2nd and (n-1)th-ish
+  // ---------------------------------------------------------------
+  function placeGorillas() {
+    const n = state.buildings.length;
+    const leftIdx = randInt(1, 2);
+    const rightIdx = randInt(n - 3, n - 2);
+    const g = [];
+    for (const idx of [leftIdx, rightIdx]) {
+      const b = state.buildings[idx];
+      g.push({
+        x: b.x + b.w / 2,
+        y: b.y - GORILLA_H / 2,
+        building: idx,
+        arm: "down", // down | left | right (throwing pose)
+      });
+    }
+    state.gorillas = g;
+    // Clear any building bits poking into the gorilla bodies (flatten roof)
+  }
+
+  const GORILLA_W = 28, GORILLA_H = 30;
+
+  // ---------------------------------------------------------------
+  //  Rendering
+  // ---------------------------------------------------------------
+  function draw() {
+    // Sky
+    ctx.fillStyle = SKY;
+    ctx.fillRect(0, 0, W, H);
+
+    drawSun();
+
+    // Buildings via mask (so craters show as sky)
+    ctx.drawImage(mask, 0, 0);
+    // Windows (only where building still solid)
+    for (const b of state.buildings) {
+      for (const win of b.windows) {
+        const wx = b.x + win.x, wy = b.y + win.y;
+        if (!isSolidCached(wx + 2, wy + 3)) continue;
+        ctx.fillStyle = win.lit ? "#ffdd33" : "#1a1a55";
+        ctx.fillRect(wx, wy, 6, 8);
+      }
+    }
+
+    // Gorillas
+    for (let i = 0; i < state.gorillas.length; i++) {
+      drawGorilla(state.gorillas[i], i);
+    }
+
+    // Banana in flight
+    if (state.banana) drawBanana(state.banana);
+
+    // Explosions
+    for (const e of state.explosions) drawExplosion(e);
+
+    // Wind indicator
+    drawWind();
+  }
+
+  // Cheap cached solidity test for window culling (reads big chunk once)
+  let solidCache = null;
+  function refreshSolidCache() {
+    solidCache = maskCtx.getImageData(0, 0, W, H).data;
+  }
+  function isSolidCached(x, y) {
+    if (!solidCache) return true;
+    x = Math.floor(x); y = Math.floor(y);
+    if (x < 0 || x >= W || y < 0 || y >= H) return false;
+    return solidCache[(y * W + x) * 4 + 3] > 0;
+  }
+
+  function drawSun() {
+    const cx = W / 2, cy = 60, r = 26;
+    ctx.fillStyle = "#ffff33";
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    // rays
+    ctx.strokeStyle = "#ffff33";
+    ctx.lineWidth = 2;
+    for (let a = 0; a < 12; a++) {
+      const ang = (a / 12) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(ang) * (r + 4), cy + Math.sin(ang) * (r + 4));
+      ctx.lineTo(cx + Math.cos(ang) * (r + 12), cy + Math.sin(ang) * (r + 12));
+      ctx.stroke();
+    }
+    // face
+    ctx.fillStyle = "#000";
+    if (state.sunShocked) {
+      // shocked: O mouth, wide eyes
+      ctx.beginPath(); ctx.arc(cx - 9, cy - 4, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 9, cy - 4, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy + 8, 6, 0, Math.PI * 2); ctx.fill();
+    } else {
+      // smiling
+      ctx.fillRect(cx - 11, cy - 6, 4, 4);
+      ctx.fillRect(cx + 7, cy - 6, 4, 4);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#000";
+      ctx.beginPath();
+      ctx.arc(cx, cy + 2, 10, 0.15 * Math.PI, 0.85 * Math.PI);
+      ctx.stroke();
+    }
+  }
+
+  function drawGorilla(g, idx) {
+    const x = g.x, y = g.y;
+    ctx.fillStyle = idx === 0 ? "#ff8888" : "#88ff88";
+    // Use a dark brownish body, tint by player for clarity
+    ctx.fillStyle = "#5a3a1a";
+    const w = GORILLA_W, h = GORILLA_H;
+    const left = x - w / 2, top = y - h / 2;
+    // Head
+    ctx.fillRect(left + 8, top, 12, 9);
+    // Brow
+    ctx.fillStyle = "#3a2410";
+    ctx.fillRect(left + 8, top + 3, 12, 2);
+    ctx.fillStyle = "#5a3a1a";
+    // Body
+    ctx.fillRect(left + 6, top + 9, 16, 13);
+    // Chest highlight (player color)
+    ctx.fillStyle = idx === 0 ? "#ff5555" : "#55ff55";
+    ctx.fillRect(left + 11, top + 12, 6, 7);
+    ctx.fillStyle = "#5a3a1a";
+    // Legs
+    ctx.fillRect(left + 6, top + 22, 6, 8);
+    ctx.fillRect(left + 16, top + 22, 6, 8);
+    // Arms — pose depends on throw
+    const arm = g.arm;
+    if (arm === "up" || arm === "left" || arm === "right") {
+      // both arms up (classic throwing pose) or one up
+      ctx.fillRect(left, top + 2, 6, 10);    // left arm up
+      ctx.fillRect(left + w - 6, top + 2, 6, 10); // right arm up
+    } else {
+      ctx.fillRect(left, top + 11, 6, 10);
+      ctx.fillRect(left + w - 6, top + 11, 6, 10);
+    }
+  }
+
+  function drawBanana(b) {
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.rotate(b.rot);
+    ctx.fillStyle = "#ffdd00";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 7, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#664400";
+    ctx.fillRect(-7, -1, 2, 2);
+    ctx.restore();
+  }
+
+  function drawExplosion(e) {
+    const t = e.t / e.dur;
+    const r = e.maxR * Math.sin(t * Math.PI);
+    ctx.fillStyle = `rgba(255,${Math.floor(120 + 100 * (1 - t))},0,${1 - t})`;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawWind() {
+    const cx = W / 2, y = H - 12;
+    const power = state.wind; // -10..10
+    ctx.strokeStyle = "#ff5555";
+    ctx.fillStyle = "#ff5555";
+    ctx.lineWidth = 3;
+    const len = power * 14;
+    if (Math.abs(power) < 0.1) return;
+    ctx.beginPath();
+    ctx.moveTo(cx, y);
+    ctx.lineTo(cx + len, y);
+    ctx.stroke();
+    // arrowhead
+    const dir = Math.sign(len);
+    ctx.beginPath();
+    ctx.moveTo(cx + len, y);
+    ctx.lineTo(cx + len - dir * 8, y - 5);
+    ctx.lineTo(cx + len - dir * 8, y + 5);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // ---------------------------------------------------------------
+  //  Physics / turn flow
+  // ---------------------------------------------------------------
+  function fire(angleDeg, velocity) {
+    if (state.phase !== "aiming") return;
+    const player = state.current;
+    const g = state.gorillas[player];
+    g.arm = "up";
+
+    // Player 1 throws right (angle as-is), player 2 throws left (mirror)
+    let angle = angleDeg;
+    if (player === 1) angle = 180 - angle;
+    const rad = angle * Math.PI / 180;
+    const speed = velocity;
+    const startX = g.x + (player === 0 ? GORILLA_W / 2 + 4 : -(GORILLA_W / 2 + 4));
+    const startY = g.y - GORILLA_H / 2 - 4;
+
+    state.banana = {
+      x: startX,
+      y: startY,
+      vx: Math.cos(rad) * speed,
+      vy: -Math.sin(rad) * speed,
+      rot: 0,
+      from: player,
+      t: 0,
+    };
+    state.phase = "flying";
+    statusEl.textContent = "🍌 Banana away!";
+    fireBtn.disabled = true;
+    playThrow();
+  }
+
+  const DT = 0.08;           // physics timestep (seconds per step) scaled for feel
+  const PX_PER_UNIT = 1.6;   // velocity → pixels scaling
+
+  function stepPhysics() {
+    const b = state.banana;
+    if (!b) return;
+    // Integrate (a few sub-steps per frame for smoothness)
+    const sub = 2;
+    for (let s = 0; s < sub; s++) {
+      b.vx += state.wind * 0.6 * (DT / sub);
+      b.vy += state.gravity * 3.5 * (DT / sub);
+      b.x += b.vx * PX_PER_UNIT * (DT / sub);
+      b.y += b.vy * PX_PER_UNIT * (DT / sub);
+      b.rot += 0.4;
+      b.t += DT / sub;
+
+      // Off sides → lost (still subject to coming back via wind, so only kill far off)
+      if (b.x < -40 || b.x > W + 40) { missShot(); return; }
+      if (b.y > H + 40) { missShot(); return; }
+
+      // Hit a gorilla?
+      const hitG = gorillaHitAt(b.x, b.y);
+      if (hitG !== -1) {
+        if (hitG === b.from && b.t < 0.25) continue; // ignore self at launch
+        explodeOnGorilla(hitG);
+        return;
+      }
+
+      // Hit sun? (cosmetic)
+      if (dist(b.x, b.y, W / 2, 60) < 28) {
+        state.sunShocked = true;
+        setTimeout(() => { if (state) state.sunShocked = false; }, 1500);
+      }
+
+      // Hit building?
+      if (isSolid(b.x, b.y)) {
+        explodeOnBuilding(b.x, b.y);
+        return;
+      }
+    }
+  }
+
+  function gorillaHitAt(x, y) {
+    for (let i = 0; i < state.gorillas.length; i++) {
+      const g = state.gorillas[i];
+      if (Math.abs(x - g.x) < GORILLA_W / 2 && Math.abs(y - g.y) < GORILLA_H / 2) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  function explodeOnBuilding(x, y) {
+    const r = 18;
+    addCrater(x, y, r);
+    refreshSolidCache();
+    state.explosions.push({ x, y, maxR: r + 6, t: 0, dur: 24 });
+    recordAIResult(x);
+    state.banana = null;
+    playExplosion();
+    endTurn(false);
+  }
+
+  // Let the computer remember how far off it was, so it walks shots in.
+  function recordAIResult(impactX) {
+    if (state.config.mode !== 1 || state.banana.from !== 1) return;
+    const foeX = state.gorillas[0].x;
+    // AI (player 2) throws leftward; landing short = impact right of foe.
+    // Positive error → need more power.
+    state.aiMemory.lastError = impactX - foeX;
+    state.aiMemory.shots++;
+  }
+
+  function explodeOnGorilla(idx) {
+    state.explosions.push({ x: state.gorillas[idx].x, y: state.gorillas[idx].y, maxR: 40, t: 0, dur: 40 });
+    state.banana = null;
+    playExplosion();
+    const winner = idx === 0 ? 1 : 0; // the one hit loses
+    state.scores[winner]++;
+    state.phase = "scored";
+    updateHUD();
+    const wname = state.config.names[winner];
+    statusEl.textContent = `💥 ${state.config.names[idx]} was hit! ${wname} scores!`;
+    state.winnerThisRound = winner;
+    // Victory dance + next round
+    setTimeout(() => {
+      if (state.scores[winner] >= state.config.winScore) {
+        matchOver(winner);
+      } else {
+        nextRound(`${wname} won the round!`);
+      }
+    }, 1800);
+  }
+
+  function missShot() {
+    recordAIResult(state.banana.x);
+    state.banana = null;
+    playMiss();
+    endTurn(true);
+  }
+
+  function endTurn(missed) {
+    state.gorillas[state.current].arm = "down";
+    if (state.phase === "scored") return;
+    state.current = state.current === 0 ? 1 : 0;
+    state.phase = "aiming";
+    fireBtn.disabled = false;
+    updateTurnUI();
+    if (missed) statusEl.textContent = "Missed! " + state.config.names[state.current] + ", your shot.";
+    else statusEl.textContent = state.config.names[state.current] + "'s turn.";
+    maybeAITurn();
+  }
+
+  // ---------------------------------------------------------------
+  //  Computer opponent (controls player 2)
+  // ---------------------------------------------------------------
+  function maybeAITurn() {
+    if (state.config.mode === 1 && state.current === 1 && state.phase === "aiming") {
+      fireBtn.disabled = true;
+      // The AI improves its guess each shot by remembering last error
+      setTimeout(() => {
+        const guess = aiComputeShot();
+        angleInput.value = Math.round(guess.angle);
+        velInput.value = Math.round(guess.velocity);
+        fire(guess.angle, guess.velocity);
+      }, 900);
+    }
+  }
+
+  function aiComputeShot() {
+    const me = state.gorillas[1], foe = state.gorillas[0];
+    const dx = me.x - foe.x;            // positive distance to the left
+    const dy = foe.y - me.y;
+    // Start from a physics-informed estimate, then nudge by remembered error
+    let angle = state.aiMemory.angle;
+    let velocity = state.aiMemory.velocity;
+    if (state.aiMemory.shots === 0) {
+      angle = 45 + randInt(-8, 8);
+      // crude range estimate
+      velocity = Math.min(150, Math.max(40, Math.sqrt(Math.abs(dx)) * 6 + 20));
+    } else {
+      // adjust velocity based on last miss direction
+      velocity += state.aiMemory.lastError * 0.4 + randInt(-3, 3);
+      angle += randInt(-3, 3);
+    }
+    angle = clamp(angle, 10, 85);
+    velocity = clamp(velocity, 20, 180);
+    state.aiMemory.angle = angle;
+    state.aiMemory.velocity = velocity;
+    return { angle, velocity };
+  }
+
+  // ---------------------------------------------------------------
+  //  Rounds / match
+  // ---------------------------------------------------------------
+  function newMatch(config) {
+    state = {
+      config,
+      gravity: config.gravity,
+      scores: [0, 0],
+      current: 0,
+      phase: "aiming",
+      buildings: [],
+      craters: [],
+      gorillas: [],
+      banana: null,
+      explosions: [],
+      wind: 0,
+      sunShocked: false,
+      aiMemory: { shots: 0, angle: 45, velocity: 75, lastError: 0 },
+    };
+    initMask();
+    startRound();
+    updateHUD();
+    el("p1name").textContent = config.names[0];
+    el("p2name").textContent = config.names[1];
+    setup.style.display = "none";
+    controls.classList.remove("hidden");
+  }
+
+  function startRound() {
+    state.buildings = makeCity();
+    state.craters = [];
+    placeGorillas();
+    // carve gorilla footing so the banana start is clear
+    drawBuildingsToMask();
+    refreshSolidCache();
+    state.banana = null;
+    state.explosions = [];
+    state.wind = randInt(-10, 10) + Math.random() - 0.5;
+    state.phase = "aiming";
+    state.aiMemory = { shots: 0, angle: 45, velocity: 75, lastError: 0 };
+    fireBtn.disabled = false;
+    updateTurnUI();
+    statusEl.textContent = `${state.config.names[state.current]}, take aim!`;
+    maybeAITurn();
+  }
+
+  function nextRound(msg) {
+    state.current = state.winnerThisRound !== undefined ? state.winnerThisRound : 0;
+    startRound();
+    if (msg) statusEl.textContent = msg + " New buildings — " + state.config.names[state.current] + " starts.";
+  }
+
+  function matchOver(winner) {
+    state.phase = "over";
+    fireBtn.disabled = true;
+    statusEl.textContent = `🏆 ${state.config.names[winner]} WINS THE MATCH ${state.scores[winner]}–${state.scores[winner === 0 ? 1 : 0]}!`;
+    turnIndicator.textContent = "Match over";
+    // victory dance handled in render loop via flag
+    state.victor = winner;
+  }
+
+  // ---------------------------------------------------------------
+  //  HUD / UI helpers
+  // ---------------------------------------------------------------
+  function updateHUD() {
+    el("p1score").textContent = state.scores[0];
+    el("p2score").textContent = state.scores[1];
+  }
+
+  function updateTurnUI() {
+    const name = state.config.names[state.current];
+    turnIndicator.textContent = name + "'s turn";
+    turnIndicator.style.color = state.current === 0 ? "#ff5555" : "#55ff55";
+  }
+
+  // ---------------------------------------------------------------
+  //  Sound (WebAudio, tiny blips — no assets needed)
+  // ---------------------------------------------------------------
+  let audioCtx = null;
+  function ac() {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch (e) { audioCtx = null; }
+    }
+    return audioCtx;
+  }
+  function beep(freq, dur, type, vol) {
+    const a = ac(); if (!a) return;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type || "square";
+    o.frequency.value = freq;
+    g.gain.value = vol || 0.05;
+    o.connect(g); g.connect(a.destination);
+    o.start();
+    o.frequency.linearRampToValueAtTime(freq * 0.6, a.currentTime + dur);
+    g.gain.linearRampToValueAtTime(0, a.currentTime + dur);
+    o.stop(a.currentTime + dur);
+  }
+  function playThrow() { beep(330, 0.12, "triangle", 0.05); }
+  function playExplosion() {
+    const a = ac(); if (!a) return;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = "sawtooth"; o.frequency.value = 120;
+    g.gain.value = 0.12;
+    o.connect(g); g.connect(a.destination);
+    o.start();
+    o.frequency.exponentialRampToValueAtTime(40, a.currentTime + 0.3);
+    g.gain.linearRampToValueAtTime(0, a.currentTime + 0.3);
+    o.stop(a.currentTime + 0.3);
+  }
+  function playMiss() { beep(160, 0.1, "sine", 0.04); }
+
+  // ---------------------------------------------------------------
+  //  Main loop
+  // ---------------------------------------------------------------
+  let danceFrame = 0;
+  function loop() {
+    if (state) {
+      if (state.phase === "flying") {
+        stepPhysics();
+      }
+      // advance explosions
+      for (const e of state.explosions) e.t++;
+      state.explosions = state.explosions.filter((e) => e.t < e.dur);
+
+      // victory dance
+      if (state.phase === "over" && state.victor !== undefined) {
+        danceFrame++;
+        const g = state.gorillas[state.victor];
+        g.arm = (Math.floor(danceFrame / 12) % 2 === 0) ? "up" : "down";
+      }
+
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  // ---------------------------------------------------------------
+  //  Utility
+  // ---------------------------------------------------------------
+  function randInt(a, b) { return Math.floor(Math.random() * (b - a + 1)) + a; }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function dist(x1, y1, x2, y2) { return Math.hypot(x1 - x2, y1 - y2); }
+
+  // ---------------------------------------------------------------
+  //  Wiring
+  // ---------------------------------------------------------------
+  el("startBtn").addEventListener("click", () => {
+    const cfg = defaultConfig();
+    cfg.mode = parseInt(el("mode").value, 10);
+    cfg.names = [
+      el("name1").value.trim() || "Player 1",
+      cfg.mode === 1 ? "Computer" : (el("name2").value.trim() || "Player 2"),
+    ];
+    cfg.gravity = parseFloat(el("gravity").value);
+    cfg.winScore = clamp(parseInt(el("winscore").value, 10) || 3, 1, 10);
+    newMatch(cfg);
+  });
+
+  fireBtn.addEventListener("click", () => {
+    const a = clamp(parseFloat(angleInput.value) || 0, 0, 90);
+    const v = clamp(parseFloat(velInput.value) || 0, 1, 200);
+    fire(a, v);
+  });
+
+  el("newGameBtn").addEventListener("click", () => {
+    setup.style.display = "flex";
+    controls.classList.add("hidden");
+    state = null;
+    ctx.fillStyle = SKY; ctx.fillRect(0, 0, W, H);
+    statusEl.textContent = "Set up your match above";
+  });
+
+  [angleInput, velInput].forEach((inp) =>
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !fireBtn.disabled) fireBtn.click();
+    })
+  );
+
+  // Title screen idle render
+  ctx.fillStyle = SKY; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#ffff55";
+  ctx.font = "bold 40px Courier New";
+  ctx.textAlign = "center";
+  ctx.fillText("🦍 GORILLAS 🦍", W / 2, H / 2 - 10);
+  ctx.font = "16px Courier New";
+  ctx.fillStyle = "#fff";
+  ctx.fillText("Press START GAME to begin", W / 2, H / 2 + 24);
+
+  loop();
+})();
+</script>
+</body>
+</html>
